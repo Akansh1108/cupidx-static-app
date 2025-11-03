@@ -1,0 +1,1 @@
+# cupidx-static-app
