@@ -1,368 +1,163 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>CupidX — Compatibility Coach</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Tailwind CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Supabase CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <style>
-    .hidden { display: none; }
-    .modal-bg { background: rgba(0,0,0,0.4); position: fixed; top:0; left:0; width:100vw; height:100vh; z-index:50; display:flex; align-items:center; justify-content:center;}
-    .spinner { border: 2px solid #f3f3f3; border-radius: 50%; border-top: 2px solid #555; width: 20px; height: 20px; animation: spin 0.6s linear infinite;}
-    @keyframes spin { 0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);} }
-    /* Simple transitions for modules */
-    .fade-enter { animation: fadeIn 0.3s linear; }
-    @keyframes fadeIn {0% {opacity: 0;} 100% {opacity: 1;}}
-  </style>
-</head>
-<body class="min-h-screen bg-gray-50 flex items-center justify-center">
-  <main id="mainPanel" class="w-full max-w-sm mx-auto mt-8 p-6 bg-white shadow-lg rounded-lg">
-    <!-- Registration Form (displays on load) -->
-    <form id="regForm" autocomplete="off" class="space-y-4 fade-enter">
-      <h1 class="text-xl font-bold mb-2 text-indigo-700">CupidX Registration</h1>
-      <div>
-        <label for="name" class="block font-medium mb-1">Full Name</label>
-        <input id="name" name="name" type="text" required class="w-full p-2 border rounded" />
-      </div>
-      <div>
-        <label for="email" class="block font-medium mb-1">Email</label>
-        <input id="email" name="email" type="email" required class="w-full p-2 border rounded" autocomplete="email" />
-      </div>
-      <div class="hidden">
-        <label for="website">Website</label>
-        <input type="text" id="website" name="website" tabindex="-1" />
-      </div>
-      <div>
-        <label for="phone" class="block font-medium mb-1">Phone (optional)</label>
-        <input id="phone" name="phone" type="tel" class="w-full p-2 border rounded" />
-      </div>
-      <div>
-        <label for="dob" class="block font-medium mb-1">Date of Birth</label>
-        <input id="dob" name="date_of_birth" type="date" required class="w-full p-2 border rounded" />
-        <div id="ageError" class="text-red-500 text-sm hidden"></div>
-      </div>
-      <div>
-        <label for="source" class="block font-medium mb-1">How did you hear about CupidX? <span class="text-gray-400">(optional)</span></label>
-        <select id="source" name="source" class="w-full p-2 border rounded">
-          <option value="">Select</option>
-          <option value="Friend">Friend</option>
-          <option value="Instagram">Instagram</option>
-          <option value="LinkedIn">LinkedIn</option>
-          <option value="Event">Event</option>
-          <option value="Web Search">Web Search</option>
-          <option value="Other">Other</option>
-        </select>
-      </div>
-      <div class="flex items-start">
-        <input id="consent" name="consent" type="checkbox" required class="mr-2 mt-1" />
-        <label for="consent" class="text-sm">
-          I agree to the
-          <button type="button" id="modalBtn" class="text-blue-600 underline">Privacy Policy & Terms</button>.
-        </label>
-      </div>
-      <div id="consentError" class="text-red-500 text-sm hidden"></div>
-      <button type="submit" id="submitBtn" class="w-full bg-indigo-600 text-white py-2 rounded flex items-center justify-center disabled:opacity-60 disabled:cursor-not-allowed">
-        <span>Register</span>
-        <span id="spinner" class="ml-2 hidden spinner"></span>
-      </button>
-      <div id="alert" class="mt-2 text-center text-sm"></div>
-    </form>
-
-    <!-- Success Panel (shows after registration, unlocks app) -->
-    <div id="successPanel" class="hidden flex flex-col items-center text-green-700 fade-enter">
-      <svg width="48" height="48"><circle cx="24" cy="24" r="24" fill="#34d399"/><path d="M34 16l-13 13-5-5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <h2 class="text-xl font-bold mt-2">Registration Successful!</h2>
-      <p class="mt-1 text-sm text-gray-700 mb-4">Thank you for joining CupidX.<br/>Let’s map your Emotional Blueprint and discover your ideal connection style!</p>
-      <button id="startAppBtn" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Start CupidX Experience</button>
-    </div>
-
-    <!-- CupidX Modules (hidden until registration) -->
-    <div id="appPanel" class="hidden fade-enter">
-      <!-- Dynamic module contents -->
-    </div>
-  </main>
-
-  <!-- Privacy Modal -->
-  <div id="privacyModal" class="hidden modal-bg" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
-    <div class="bg-white rounded-md max-w-md w-full p-6 shadow-lg relative">
-      <h2 id="privacy-title" class="text-lg font-semibold mb-2">Privacy Policy & Terms</h2>
-      <p class="text-sm mb-2">Eligibility: You must be 18+ to register. We collect basic personal data (name, email, phone, DOB, referral source). Data is used solely to manage registration for CupidX and for direct communication. Your data is retained securely and not shared or sold. You have the right to request deletion. For queries, contact [Cupidx team contact here].</p>
-      <button id="closeModal" class="absolute top-2 right-2 text-gray-400 hover:text-gray-700" aria-label="Close">&times;</button>
-      <button id="acknowledgeModal" class="mt-2 w-full bg-indigo-600 text-white py-2 rounded">Acknowledge & Continue</button>
-    </div>
-  </div>
-
-  <script>
-    // Supabase config (replace with your values)
-    const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // <-- Replace this!
-    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY'; // <-- Replace this!
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-    // Elements
-    const form = document.getElementById('regForm');
-    const dobInput = document.getElementById('dob');
-    const consent = document.getElementById('consent');
-    const modalBtn = document.getElementById('modalBtn');
-    const privacyModal = document.getElementById('privacyModal');
-    const acknowledgeModal = document.getElementById('acknowledgeModal');
-    const closeModal = document.getElementById('closeModal');
-    const ageError = document.getElementById('ageError');
-    const consentError = document.getElementById('consentError');
-    const alertBox = document.getElementById('alert');
-    const spinner = document.getElementById('spinner');
-    const submitBtn = document.getElementById('submitBtn');
-    const successPanel = document.getElementById('successPanel');
-    const appPanel = document.getElementById('appPanel');
-    const startAppBtn = document.getElementById('startAppBtn');
-    const mainPanel = document.getElementById('mainPanel');
-
-    // Set max DOB for 18+ validation
-    function setDOBMax() {
-      const today = new Date();
-      today.setFullYear(today.getFullYear() - 18);
-      dobInput.max = today.toISOString().slice(0,10);
-    }
-    // Helper Validators
-    function isEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); }
-    function calcAge(birth) {
-      const b = new Date(birth); const today = new Date();
-      let age = today.getFullYear() - b.getFullYear();
-      const m = today.getMonth() - b.getMonth();
-      if (m < 0 || (m == 0 && today.getDate() < b.getDate())) age--;
-      return age;
-    }
-    function setAlert(text, color='red') {
-      alertBox.textContent = text; alertBox.className = `mt-2 text-center text-${color}-500 text-sm`;
-    }
-    function setLoading(isLoading) {
-      submitBtn.disabled = isLoading; spinner.classList.toggle('hidden', !isLoading);
-    }
-    // Modal Events
-    modalBtn.onclick = () => privacyModal.classList.remove('hidden');
-    closeModal.onclick = () => privacyModal.classList.add('hidden');
-    acknowledgeModal.onclick = () => privacyModal.classList.add('hidden');
-
-    setDOBMax();
-    form.onsubmit = async function(e) {
-      e.preventDefault(); setAlert(''); successPanel.classList.add('hidden');
-      const name = form.name.value.trim();
-      const email = form.email.value.trim();
-      const phone = form.phone.value.trim() || null;
-      const dob = form.date_of_birth.value;
-      const source = form.source.value || null;
-      const honeypot = form.website.value.trim();
-      const consentChecked = consent.checked;
-      // Validate
-      if (honeypot) return setAlert("Bot detected.");
-      if (!isEmail(email)) return setAlert("Please enter a valid email.");
-      if (!dob) { ageError.textContent = "Date of birth required."; ageError.classList.remove('hidden'); return;}
-      ageError.classList.add('hidden');
-      if (calcAge(dob) < 18) { ageError.textContent = "You must be 18 years or older."; ageError.classList.remove('hidden'); return;}
-      if (!consentChecked) { consentError.textContent = "Consent required."; consentError.classList.remove('hidden'); return;}
-      consentError.classList.add('hidden');
-      setLoading(true);
-      try {
-        const { error } = await supabase
-          .from('registrations')
-          .insert([{ name, email, phone, date_of_birth: dob, source, consent: true }]);
-        setLoading(false);
-        if (error) {
-          if (error.message && error.message.includes('chk_adult_only'))
-            return setAlert("18+ only. You must be at least 18 years old.", 'red');
-          return setAlert("Registration failed. Try again later.", 'red');
-        }
-        form.classList.add('hidden');
-        successPanel.classList.remove('hidden');
-      } catch (err) { setLoading(false); setAlert("Unexpected error.", 'red'); }
-    };
-    dobInput.onchange = () => { ageError.classList.add('hidden'); setAlert(''); };
-    consent.onchange = () => { consentError.classList.add('hidden'); };
-
-    // Move to CupidX coaching modules
-    if (startAppBtn) startAppBtn.onclick = () => { successPanel.classList.add('hidden'); loadCupidX(); };
-
-    // Main CupidX workflow (simulate GPT convo, linear interactive modules)
-    function loadCupidX() {
-      appPanel.classList.remove('hidden');
-      let userData = { name: form.name.value.trim(), dob: form.date_of_birth.value, email: form.email.value.trim };
-      let step = 0;
-      const flow = [
-        // 0: Screening
-        {
-          html: `<h2 class="text-lg font-bold mb-2">Hey there! 🧠</h2>
-            <p class="mb-2">Before we map your Emotional Blueprint, let's get a sense of your vibe.</p>
-            <form id="screeningForm" class="space-y-3">
-              <div>
-                <label class="block text-sm">How do you identify your gender?</label>
-                <select id="gender" class="w-full p-2 border rounded">
-                  <option value="">Select...</option>
-                  <option>Male</option><option>Female</option><option>Non-binary</option><option>Prefer not to say</option><option>Other</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm">Who are you usually interested in dating?</label>
-                <select id="pref" class="w-full p-2 border rounded">
-                  <option value="">Select...</option>
-                  <option>Men</option><option>Women</option><option>Both</option><option>All genders</option><option>Prefer not to say</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm">Relationship status?</label>
-                <select id="status" class="w-full p-2 border rounded">
-                  <option value="">Select...</option>
-                  <option>Single</option><option>Dating</option><option>Situationship</option><option>Prefer not to say</option>
-                </select>
-              </div>
-              <button type="submit" class="mt-2 w-full bg-indigo-600 text-white py-2 rounded">Next</button>
-            </form>`
-        },
-        // 1: Compatibility Intake (8-12 key questions, dynamically rendered)
-        {
-          html: `<h2 class="text-lg font-bold mb-2">Compatibility Intake</h2>
-            <div id="intakePanel"></div>`
-        },
-        // 2: Generate Blueprint
-        {
-          html: `<h2 class="text-lg font-bold mb-2">Your Emotional Blueprint</h2>
-            <div id="blueprintPanel"></div>
-            <button id="nextFit" class="w-full mt-3 bg-indigo-600 text-white py-2 rounded">Next</button>`
-        },
-        // 3: Partner Fit Profile + Action Kit
-        {
-          html: `<h2 class="text-lg font-bold mb-2">Partner Fit Profile & Action Kit</h2>
-            <div id="fitPanel"></div>
-            <button id="nextVibe" class="w-full mt-3 bg-indigo-600 text-white py-2 rounded">Next</button>`
-        },
-        // 4: Vibe Check Module
-        {
-          html: `<h2 class="text-lg font-bold mb-2">Vibe Check Guide</h2>
-            <div id="vibePanel"></div>
-            <button id="nextEnd" class="w-full mt-3 bg-indigo-600 text-white py-2 rounded">Finish</button>`
-        },
-        // 5: End Screen
-        {
-          html: `<h2 class="text-lg font-bold mb-2 text-green-600">You're Ready!</h2>
-            <p class="mb-4">Your CupidX Journey is complete.<br/>Remember: Chemistry deserves better data.</p>
-            <button id="startOverBtn" class="w-full bg-gray-200 text-indigo-700 py-2 rounded">Start Over</button>`
-        }
-      ];
-
-      // Module logic
-      function renderStep(idx) {
-        appPanel.innerHTML = flow[idx].html;
-        if (idx === 0) {
-          document.getElementById('screeningForm').onsubmit = function(e) {
-            e.preventDefault();
-            userData.gender = document.getElementById('gender').value;
-            userData.pref = document.getElementById('pref').value;
-            userData.status = document.getElementById('status').value;
-            step++; renderStep(step);
-            runIntake();
-          }
-        } else if (idx === 1) {
-          runIntake();
-        } else if (idx === 2) {
-          document.getElementById('nextFit').onclick = () => { step++; renderStep(step); runFit(); }
-          runBlueprint();
-        } else if (idx === 3) {
-          document.getElementById('nextVibe').onclick = () => { step++; renderStep(step); runVibeCheck(); }
-          runFit();
-        } else if (idx === 4) {
-          document.getElementById('nextEnd').onclick = () => { step++; renderStep(step);}
-          runVibeCheck();
-        } else if (idx === 5) {
-          document.getElementById('startOverBtn').onclick = () => { appPanel.classList.add('hidden'); form.classList.remove('hidden'); }
-        }
+  <head>
+    <meta charset="UTF-8" />
+    <title>CupidX — Compatibility Coach</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <style>
+      .hidden { display: none; }
+      .modal-bg {
+        background: rgba(0,0,0,0.4);
+        position: fixed; top:0; left:0; width:100vw; height:100vh; z-index:50;
+        display:flex; align-items:center; justify-content:center;
       }
-      renderStep(step);
+      .spinner { border:2px solid #f3f3f3; border-radius:50%; border-top:2px solid #555; width:20px; height:20px; animation:spin .6s linear infinite; }
+      @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+      .fade-enter { animation: fadeIn .3s linear; }
+      @keyframes fadeIn { 0%{opacity:0} 100%{opacity:1} }
+    </style>
+  </head>
+  <body class="min-h-screen bg-gray-50 flex items-center justify-center">
+    <main id="mainPanel" class="w-full max-w-sm mx-auto mt-8 p-6 bg-white shadow-lg rounded-lg">
+      <!-- Registration Form (displays on load) -->
+      <form id="regForm" autocomplete="off" class="space-y-4 fade-enter">
+        <h1 class="text-xl font-bold mb-2 text-indigo-700">CupidX Registration</h1>
 
-      // Introspective questions
-      function runIntake() {
-        const qs = [
-          "What's your relationship intent? (serious / exploring / casual)",
-          "Describe your social energy week (work, weekends)",
-          "Communication style? (direct / diplomatic / playful / analytical)",
-          "Attachment vibe? (craves closeness / values independence / balanced)",
-          "Conflict stance? (avoid / head-on / reflect / humor)",
-          "Top 3 values?",
-          "Lifestyle non-negotiables?",
-          "Two dealbreakers?",
-          "Primary love language?",
-          "Pattern from past you'd like to change?",
-          "City + age range (optional)?",
-          "Preferred meeting platforms (apps / IRL / friends)?"
-        ];
-        let answers = []; let qNum = 0;
-        function showQ() {
-          document.getElementById('intakePanel').innerHTML =
-            `<label class="block mb-2">Q${qNum+1}. ${qs[qNum]}</label>
-             <input id="intakeAns" type="text" class="w-full p-2 border rounded" autofocus />
-             <button type="button" id="nextQBtn" class="mt-2 w-full bg-indigo-600 text-white py-2 rounded">${qNum < qs.length-1 ? 'Next' : 'Generate Blueprint'}</button>`;
-          document.getElementById('nextQBtn').onclick = () => {
-            answers[qNum] = document.getElementById('intakeAns').value;
-            if (qNum < qs.length-1) { qNum++; showQ(); }
-            else { userData.intake = answers; step++; renderStep(step); runBlueprint(); }
-          };
-        }
-        showQ();
-      }
-
-      // Blueprint generation (simulate deep analysis)
-      function runBlueprint() {
-        let content = `<ul class="list-disc ml-5 mb-2">`;
-        content += `<li><b>Core vibe:</b> ${userData.intake[0] || '---'}</li>`;
-        content += `<li><b>Energy & social pattern:</b> ${userData.intake[1] || '---'}</li>`;
-        content += `<li><b>Communication + conflict tendency:</b> ${userData.intake[2]}, ${userData.intake[4]}</li>`;
-        content += `<li><b>Values stack:</b> ${userData.intake[5]}</li>`;
-        content += `<li><b>Watch-outs:</b> ${userData.intake[9]}</li>`;
-        content += `<li><b>Growth move:</b> Practice one micro-vulnerability in the next week.</li>`;
-        content += `</ul><p class="text-xs text-gray-500 mt-1">Your privacy is paramount. No data stored beyond session.</p>`;
-        document.getElementById('blueprintPanel').innerHTML = content;
-      }
-
-      function runFit() {
-        let fit = `
         <div>
-          <h3 class="font-semibold mt-2 mb-1">Best-fit archetype</h3>
-          <p class="mb-2">The Secure Communicator, The Patient Gardener, or The Independent Ally.</p>
-          <h3 class="font-semibold mt-2 mb-1">Green flags</h3>
-          <ul class="ml-5 mb-2 list-disc">
-            <li>Consistent communication style</li>
-            <li>Respects autonomy and space</li>
-            <li>Open to emotional growth</li>
-          </ul>
-          <h3 class="font-semibold mt-2 mb-1">Likely frictions & repair</h3>
-          <ul class="ml-5 mb-2 list-disc">
-            <li>May avoid conflict — try gentle check-ins</li>
-            <li>Can be fiercely independent — validate requests</li>
-          </ul>
-          <h3 class="font-semibold mt-2 mb-1">Profile & micro-habits</h3>
-          <p>Bio idea: “Building connection that’s both safe and surprising.”<br/>
-            Try: 1) Share a small vulnerability; 2) Attempt a new opener; 3) Choose a support habit for the week.</p>
-        </div>`;
-        document.getElementById('fitPanel').innerHTML = fit;
+          <label for="name" class="block font-medium mb-1">Full Name</label>
+          <input id="name" name="name" type="text" required class="w-full p-2 border rounded" />
+        </div>
+
+        <div>
+          <label for="email" class="block font-medium mb-1">Email</label>
+          <input id="email" name="email" type="email" required class="w-full p-2 border rounded" autocomplete="email" />
+        </div>
+
+        <!-- DOB: day, month, year split inputs with merge/validation -->
+        <div>
+          <label class="block font-medium mb-1">Date of Birth</label>
+          <div class="grid grid-cols-3 gap-2">
+            <input id="dob-day" inputmode="numeric" pattern="\\d{1,2}" maxlength="2" placeholder="DD" class="p-2 border rounded text-center" aria-label="Day" />
+            <input id="dob-month" inputmode="numeric" pattern="\\d{1,2}" maxlength="2" placeholder="MM" class="p-2 border rounded text-center" aria-label="Month" />
+            <input id="dob-year" inputmode="numeric" pattern="\\d{4}" maxlength="4" placeholder="YYYY" class="p-2 border rounded text-center" aria-label="Year" />
+          </div>
+          <p id="dob-error" class="mt-1 text-sm text-red-600 hidden"></p>
+          <!-- hidden merged field used for submission -->
+          <input id="dob" name="dob" type="hidden" />
+        </div>
+
+        <button id="submitBtn" type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded">Continue</button>
+      </form>
+
+      <!-- Results panels, placeholders kept -->
+      <section id="blueprintPanel" class="mt-4"></section>
+      <section id="fitPanel" class="mt-4"></section>
+      <section id="vibePanel" class="mt-4"></section>
+    </main>
+
+    <script>
+      function pad2(n){ return n.toString().padStart(2,'0'); }
+      function isValidISODate(iso){
+        // Expect YYYY-MM-DD and must be a real calendar date
+        if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(iso)) return false;
+        const [y,m,d] = iso.split('-').map(Number);
+        const dt = new Date(Date.UTC(y, m-1, d));
+        return dt.getUTCFullYear() === y && (dt.getUTCMonth()+1) === m && dt.getUTCDate() === d;
+      }
+      function ageFromISO(iso){
+        const [y,m,d] = iso.split('-').map(Number);
+        const today = new Date();
+        let age = today.getFullYear() - y;
+        const mDiff = (today.getMonth()+1) - m;
+        const dDiff = today.getDate() - d;
+        if (mDiff < 0 || (mDiff === 0 && dDiff < 0)) age--;
+        return age;
       }
 
-      function runVibeCheck() {
-        const rows = [
-          ["How do you show someone you like them?", "Humor + consistency", "Dismissive or expects mind-reading"],
-          ["How do you handle disagreements?", "Talks it out calmly", "Gets defensive / avoids"],
-          ["What helps you feel supported when stressed?", "Names specific needs", "“I don’t need anyone”"],
-          ["How do you balance personal and couple time?", "Space + connection balance", "Thinks constant contact = love"],
-          ["What’s your idea of a fun weekend?", "Mix of relax and explore", "“Sleep / drink / whatever”"],
-          ["Have you ever had to apologize in a relationship?", "Accepts responsibility", "Blames others completely"],
-        ];
-        let content = `<table class="w-full text-sm border-separate mb-2"><tr><th class="text-left">💬 Ask This</th><th class="text-left">✅ Harmony</th><th class="text-left">🚩 Friction</th></tr>`;
-        rows.forEach(([q, a, f]) => {
-          content += `<tr><td>${q}</td><td class="text-green-600">${a}</td><td class="text-red-500">${f}</td></tr>`;
-        });
-        content += `</table><div class="text-xs text-gray-700 mb-2">Aligned answers suggest emotional safety for your style; red-flag patterns may stress your way of relating.</div>`;
-        document.getElementById('vibePanel').innerHTML = content;
+      function mergeAndValidateDob(){
+        const dayEl = document.getElementById('dob-day');
+        const monEl = document.getElementById('dob-month');
+        const yearEl = document.getElementById('dob-year');
+        const hiddenEl = document.getElementById('dob');
+        const errEl = document.getElementById('dob-error');
+
+        const dd = dayEl.value.trim();
+        const mm = monEl.value.trim();
+        const yyyy = yearEl.value.trim();
+
+        // Basic presence
+        if(!dd || !mm || !yyyy){
+          errEl.textContent = 'Please enter day, month, and year.';
+          errEl.classList.remove('hidden');
+          return { ok:false };
+        }
+
+        // Normalize and numeric checks
+        if(!/^\\d{1,2}$/.test(dd) || !/^\\d{1,2}$/.test(mm) || !/^\\d{4}$/.test(yyyy)){
+          errEl.textContent = 'Invalid format. Use DD, MM, and YYYY.';
+          errEl.classList.remove('hidden');
+          return { ok:false };
+        }
+        const d = Number(dd);
+        const m = Number(mm);
+        const y = Number(yyyy);
+        if(m < 1 || m > 12){
+          errEl.textContent = 'Month must be between 1 and 12.';
+          errEl.classList.remove('hidden');
+          return { ok:false };
+        }
+        if(d < 1 || d > 31){
+          errEl.textContent = 'Day must be between 1 and 31.';
+          errEl.classList.remove('hidden');
+          return { ok:false };
+        }
+
+        const iso = `${y}-${pad2(m)}-${pad2(d)}`;
+        if(!isValidISODate(iso)){
+          errEl.textContent = 'That date doesn\'t look valid. Please check the day, month, and year.';
+          errEl.classList.remove('hidden');
+          return { ok:false };
+        }
+
+        const age = ageFromISO(iso);
+        if(age < 18){
+          errEl.textContent = 'You must be at least 18 years old to register.';
+          errEl.classList.remove('hidden');
+          return { ok:false };
+        }
+
+        errEl.textContent = '';
+        errEl.classList.add('hidden');
+        hiddenEl.value = iso;
+        return { ok:true, iso };
       }
-    }
-  </script>
-</body>
+
+      ['dob-day','dob-month','dob-year'].forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener('input', () => {
+          // Auto-advance when reaching maxlength
+          const max = Number(el.getAttribute('maxlength') || 2);
+          if(el.value.length >= max){
+            if(id === 'dob-day') document.getElementById('dob-month').focus();
+            if(id === 'dob-month') document.getElementById('dob-year').focus();
+          }
+          mergeAndValidateDob();
+        });
+        el.addEventListener('blur', mergeAndValidateDob);
+      });
+
+      document.getElementById('regForm').addEventListener('submit', (e) => {
+        const { ok } = mergeAndValidateDob();
+        if(!ok){
+          e.preventDefault();
+          return;
+        }
+        // Continue with your existing submission logic here (e.g., Supabase or next steps)
+      });
+    </script>
+  </body>
 </html>
